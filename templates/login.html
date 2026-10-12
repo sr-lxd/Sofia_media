@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}登录 · Sofia Media{% endblock %}
+{% block content %}
+<section class="login-shell">
+  <div class="intro"><span class="eyebrow">本机媒体播放器</span><h1>让每一次播放<br>回到内容本身。</h1><p>音乐、阅读、课程与影像。选择一个目录，接着上次的位置继续播放。</p><div class="features"><span>MP3 / MP4</span><span>断点续播</span><span>目录权限</span></div></div>
+  <div class="card login-card">
+    <h2>欢迎回来</h2><p class="muted">登录后查看你可以访问的媒体目录。</p>
+    {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" action="{{ url_for('login') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="username">用户名</label><input id="username" name="username" type="text" autocomplete="username" required maxlength="100" placeholder="输入用户名">
+      <label for="password">密码</label><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="输入密码">
+      <div class="button-row"><button class="primary" name="action" value="登录">登录播放器</button><button class="secondary" name="action" value="管理员登录">管理员登录</button></div>
+    </form>
+    {% if public_enabled %}<div class="divider"><span>或</span></div><form method="post" action="{{ url_for('login') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="public-button" name="action" value="公共账号登录">进入公共目录 <span aria-hidden="true">→</span></button></form>{% endif %}
+    {% if demo_mode %}<p class="demo-note">虚拟演示账号：<code>demo</code> / <code>demo-pass</code><br>管理员：<code>demo-admin</code> / <code>demo-admin-pass</code></p>{% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Sofia Media{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='pages.css') }}">
+</head>
+<body>
+  <header class="site-header"><a class="brand" href="{{ url_for('index') }}">Sofia <span>Media</span></a><nav><a href="{{ url_for('help_page') }}">使用帮助</a>{% if session.get('username') %}<a href="{{ url_for('logout') }}">退出</a>{% endif %}</nav></header>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

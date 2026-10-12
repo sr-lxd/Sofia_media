@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}播放历史 · Sofia Media{% endblock %}
+{% block content %}
+<section class="content-shell"><span class="eyebrow">管理员</span><h1>访问与播放历史</h1><p class="muted">最近 24 小时的记录，最多保留 500 条。</p>
+<div class="card table-wrap"><table><thead><tr><th>时间</th><th>账号</th><th>事件</th><th>地址</th></tr></thead><tbody>{% for row in logs %}<tr><td>{{ row.timestamp }}</td><td>{{ row.username }}</td><td>{{ row.event }}</td><td>{{ row.ip }}</td></tr>{% else %}<tr><td colspan="4" class="empty">还没有访问记录。</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

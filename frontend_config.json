@@ -1,0 +1,31 @@
+{
+  "categories": {
+    "public":      "音乐",
+    "selected":    "精选",
+    "catalog":     "论坛",
+    "children":    "儿童",
+    "junior":      "初中",
+    "senior":      "高中",
+    "famous":      "名著",
+    "reading":     "读书",
+    "storytelling":"评书",
+    "wholebook":   "整书",
+    "regimen":     "养生",
+    "education":   "教育",
+    "history":     "通史",
+    "death":       "ToBe",
+    "career":       "生涯",
+    "travelling":  "旅游",
+    "features":  "特色",
+    "ai":  "AI",
+    "millitary":  "军事",
+    "economy":  "经济",
+    "science":   "科技",
+    "latest":      "时事",
+    "old":         "旧闻",
+    "forbidden":   "禁闻",
+    "quintessence":   "古文",
+    "videosongs":   "影音",
+    "film":       "电影"
+  }
+}

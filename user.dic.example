@@ -1,0 +1,4 @@
+# username:password-or-hash:comma-separated-category-keys
+# All accounts below are fictitious demonstration accounts.
+demo:demo-pass:public,features
+reader:reader-pass:public,selected,reading

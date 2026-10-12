@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <!-- 禁止用户缩放 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sofia Media · 播放器</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <style>
+    /* 启动遮罩，用于移动端用户交互解锁自动播放 */
+    #startMask {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); color: #fff;
+      font-size: 20px; display: none;
+      justify-content: center; align-items: center;
+      text-align: center; z-index: 2000; cursor: pointer;
+    }
+    /* 整页不滚动，只让 mainContent 滚动 */
+    html, body {
+      height:100vh; margin:0; padding:0;
+      font-family:Arial; touch-action:manipulation;
+      overflow:hidden;
+    }
+    /* 固定头部 */
+    #fixedHeader {
+      position:fixed; top:0; left:0; right:0;
+      background:#fff; z-index:1000;
+      border-bottom:1px solid #ddd;
+      padding:5px 10px; font-size:14px;
+      line-height:1.2; transition:height .3s ease;
+      overflow:visible;
+      max-height:none; /* 目录已收起，头部高度跟随内容 */
+      min-height:70px; /* 最小高度确保基本功能可见 */
+    }
+    .toggle-btn {
+      position:absolute; top:8px; right:12px;
+      font-size:18px; cursor:pointer;
+      user-select:none; transition:transform .3s ease;
+      z-index:1001;
+    }
+    #fixedHeader.collapsed { height:65px; overflow:hidden; }
+    #fixedHeader.collapsed #bottomHeader { display:none; }
+    #fixedHeader.collapsed .toggle-btn { transform:rotate(180deg); }
+
+    .container { max-width:800px; margin:0 auto; text-align:center; }
+    #fixedHeader .header-section { margin:3px 0; }
+    #headerTitle { font-size:21px; font-weight:bold; color:blue; }
+
+    #headerUser a {
+      margin:0 5px; text-decoration:none; font-weight:bold;
+      background:orange; color:#fff; padding:3px 6px; border:none;
+    }
+    #bottomHeader{display:block;}
+    #controls{margin-bottom:5px;}
+    #controls button{margin:0 3px; padding:3px 6px; font-size:14px;}
+    #audioContainer{text-align:center; margin:5px auto;}
+    #audioPlayer,#videoPlayer{display:block; margin:0 auto; width:100%; max-width:600px;}
+    #videoPlayer{display:none; max-height:160px; height:auto; object-fit:contain; width:100%; max-width:600px;}
+    #loading{text-align:center; font-size:14px; color:#666; margin:5px 0; display:none; padding:8px; background:#f8f9fa; border-radius:4px; border-left:4px solid #007bff;}
+    #fixedHeader #categories{display:flex; justify-content:space-between; align-items:center; gap:12px; max-width:600px; margin:8px auto; text-align:left;}
+    #categories button{margin:0; font-family:inherit; cursor:pointer; transition:background .15s ease;}
+    #categoryPicker{min-width:0; flex:1;}
+    #categoryCurrentRow{display:flex; align-items:center; min-width:0; min-height:42px; border:1px solid #cbd5e1; border-radius:10px; background:#f8fafc;}
+    #categories #categoryToggle{display:flex; align-items:center; gap:4px; flex-shrink:0; min-height:40px; padding:8px 0 8px 12px; border:0; border-radius:9px; background:transparent; color:#334155; font-size:14px; text-align:left;}
+    #categorySeparator{color:#64748b; flex-shrink:0;}
+    #selectedCategoryName{font-weight:600; color:#1d4ed8;}
+    #categoryChevron{color:#64748b; transition:transform .15s ease;}
+    #categories #currentTrackDetails{flex:1; min-width:0; min-height:40px; padding:8px 12px 8px 4px; border:0; border-radius:9px; background:transparent; color:#334155; font-size:14px; font-weight:400; text-align:left;}
+    #currentTrackValue{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+    #categoryCurrentRow.show-full-title{align-items:flex-start;}
+    #categoryCurrentRow.show-full-title #currentTrackValue{white-space:normal; overflow-wrap:anywhere; max-height:min(120px,20vh); overflow-y:auto;}
+    #categoryCurrentRow:focus-within{border-color:#93c5fd;}
+    #categoryToggle[aria-expanded="true"] #categoryChevron{transform:rotate(180deg);}
+    #categories #sortOrderBtn{min-height:42px; flex-shrink:0; padding:8px 12px; background:#fff; color:#475569; border:1px solid #cbd5e1; border-radius:10px; font-size:14px;}
+    #categoryPanel{position:fixed; z-index:1100; display:flex; flex-direction:column; box-sizing:border-box; padding:12px; background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 12px 32px rgba(15,23,42,.16);}
+    #categoryPanel[hidden]{display:none;}
+    #categoryPanelHeader{display:flex; align-items:center; justify-content:space-between; flex-shrink:0; padding-bottom:10px; color:#334155; font-size:14px; font-weight:600;}
+    #categories #categoryClose{width:32px; height:32px; padding:0; border:0; border-radius:8px; background:#f1f5f9; color:#64748b; font-size:22px;}
+    #categoryGrid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:2px;}
+    #categories #categoryGrid button{display:flex; align-items:center; justify-content:center; gap:4px; min-height:42px; padding:8px 4px; border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc; color:#475569; font-size:14px; font-weight:400; word-break:break-word;}
+    #categories #categoryGrid button[aria-pressed="true"]{background:#eff6ff; color:#1d4ed8; border-color:#93c5fd; font-weight:600;}
+    .category-check{visibility:hidden; font-size:12px;}
+    #categoryGrid button[aria-pressed="true"] .category-check{visibility:visible;}
+    #categories button:focus-visible{outline:2px solid #2563eb; outline-offset:2px;}
+    @media(hover:hover){
+      #categoryCurrentRow:hover,#categories #sortOrderBtn:hover{background:#eff6ff; border-color:#93c5fd;}
+      #categories #categoryGrid button:hover{background:#eff6ff;}
+    }
+    @media(max-width:600px){
+      #categories{box-sizing:border-box; gap:8px;}
+      #categoryGrid{grid-template-columns:repeat(3,minmax(0,1fr));}
+    }
+    #searchContainer{margin:5px auto; max-width:800px;}
+    #searchInput{width:100%; padding:6px; font-size:14px; box-sizing:border-box;}
+    #mainContent{position:fixed; top:0; left:0; right:0; bottom:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:0;}
+    #playlist{margin:20px auto; width:calc(100% - 36px); max-width:600px; padding:0; list-style:none; text-align:left;}
+    #playlist li{padding:8px; border-bottom:1px solid #ddd; cursor:pointer; font-size:14px; transition:transform .3s; word-break:break-word;}
+    #playlist li.active{background:#eef;}
+    #contextMenu{position:absolute; display:none; background:#fff; border:1px solid #ccc; z-index:1000;}
+    #contextMenu ul{margin:0; padding:5px; list-style:none;}
+    #contextMenu li{padding:5px 10px; cursor:pointer; font-size:14px;}
+    #contextMenu li:hover{background:#f0f0f0;}
+    #jumpIndex{position:fixed; right:5px; top:0; display:flex; flex-direction:column; justify-content:space-between; font-size:12px; user-select:none; z-index:900; pointer-events:none;}
+    #jumpIndex div{padding:2px; cursor:pointer; pointer-events:auto;}
+
+    /* 新增样式：骨架屏加载动画 */
+    @keyframes skeleton-loading {
+      0% { background-position: -200px 0; }
+      100% { background-position: calc(200px + 100%) 0; }
+    }
+    .skeleton-item {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-loading 1.5s infinite;
+    }
+
+    @media(max-width:600px){
+      #fixedHeader{padding:3px 5px; max-height:none; min-height:65px;}
+      #controls{order:1!important;}
+      #controls button{padding:2px 4px; margin:0 2px;}
+      #bottomHeader{display:flex; flex-direction:column; align-items:center;}
+      #audioContainer{order:2!important; position:relative; z-index:1;}
+      #videoPlayer{max-height:100px!important; height:auto;}
+      #categories{order:3!important; width:100%;}
+      #searchContainer{order:4!important; width:100%;}
+      #playlist{white-space:normal; overflow-x:hidden;}
+      #playlist li{word-break:break-all;}
+    }
+  </style>
+</head>
+<body>
+  <div id="startMask">点击此处开始播放</div>
+
+  {% set is_admin = session.get('admin_logged_in', False) %}
+  <div id="fixedHeader">
+    <div id="headerToggle" class="toggle-btn">▲</div>
+    <div class="container">
+      <div id="headerTitle" class="header-section">Sofia Media · 本机播放器</div>
+      <div id="currentTrackDisplay" class="header-section">
+        共有 <span id="trackCount">0</span> 首曲目
+      </div>
+      <div id="headerUser" class="header-section">
+        欢迎，{% if is_admin %}管理员{% else %}{{ username }}{% endif %}！
+        <a href="{{ url_for('help_page') }}">帮助</a>
+        <a href="{{ url_for('logout') }}">退出</a>
+        {% if sofia_home_url %}<a href="{{ sofia_home_url }}">Sofia首页</a>{% endif %}
+      </div>
+      {% if not is_admin %}
+      <div id="bottomHeader">
+        <div id="controls" class="header-section">
+          <button id="playBtn">播放</button>
+          <button id="pauseResumeBtn">暂停</button>
+          <button id="randomBtn">随机</button>
+          <button id="refreshBtn">刷新</button>
+        </div>
+        <div id="audioContainer" class="header-section">
+          <audio id="audioPlayer" controls preload="auto"></audio>
+          <video id="videoPlayer" controls preload="auto" playsinline webkit-playsinline></video>
+          <div id="loading">载入缓存中……</div>
+        </div>
+        <div id="categories" class="header-section">
+          <div id="categoryPicker">
+            <div id="categoryCurrentRow">
+              <button id="categoryToggle" type="button" aria-label="选择目录" aria-expanded="false" aria-controls="categoryPanel">
+                <span id="selectedCategoryName">待选择</span><span id="categoryChevron" aria-hidden="true">▾</span>
+              </button>
+              <span id="categorySeparator" aria-hidden="true">：</span>
+              <button id="currentTrackDetails" type="button" aria-label="展开完整曲目标题" aria-expanded="false" aria-controls="currentTrackValue"><span id="currentTrackValue">待选择</span></button>
+            </div>
+            <div id="categoryPanel" role="region" aria-labelledby="categoryPanelTitle" hidden>
+              <div id="categoryPanelHeader"><span id="categoryPanelTitle">选择目录</span><button id="categoryClose" type="button" aria-label="关闭目录选择">×</button></div>
+              <div id="categoryGrid">
+                {% for cat,label in categories.items() if cat in allowed_categories %}
+                  <button id="{{cat}}Btn" type="button" data-cat="{{cat}}" aria-pressed="false"><span class="category-check" aria-hidden="true">✓</span><span class="category-name">{{label}}</span></button>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          <button id="sortOrderBtn" type="button" aria-label="切换曲目排序">升序</button>
+        </div>
+        <div id="searchContainer" class="header-section">
+          <input type="search" id="searchInput" placeholder="搜索曲目…">
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not is_admin %}
+  <div id="mainContent"><ul id="playlist"></ul></div>
+  <div id="jumpIndex"></div>
+  {% endif %}
+
+  <script>
+    let savedTime=0, initState=null, currentCategory, current=-1,
+        isRandom=false, fullList=[], playlistArr=[],
+        currentPlayer, userPaused=false, isLoading=false,
+        lastPlayedTrack=-1, playStartTime=0, layoutAdjustmentTimer=null,
+        categoryCache={}, // 客户端分类缓存
+        currentFetchController=null, lastReqToken=0; // 🚀 添加可中断请求控制
+
+    function savePlayerState(){
+      if(current>=0){
+        localStorage.setItem('sofia-player-state',
+          JSON.stringify({category:currentCategory,index:current,time:Math.floor(currentPlayer.currentTime)}));
+      }
+    }
+    window.addEventListener('pagehide',savePlayerState);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')savePlayerState();});
+    window.addEventListener('beforeunload',savePlayerState);
+    window.addEventListener('pageshow',()=>{
+      try{let r=localStorage.getItem('sofia-player-state'); if(r) initState=JSON.parse(r);}catch{}
+    });
+
+    document.addEventListener('DOMContentLoaded',()=>{
+      try{let r=localStorage.getItem('sofia-player-state'); if(r) initState=JSON.parse(r);}catch{}
+
+      const C={{categories|tojson}}, A={{allowed_categories|tojson}},
+            audio=document.getElementById('audioPlayer'),
+            video=document.getElementById('videoPlayer'),
+            playBtn=document.getElementById('playBtn'),
+            pauseBtn=document.getElementById('pauseResumeBtn'),
+            randBtn=document.getElementById('randomBtn'),
+            refBtn=document.getElementById('refreshBtn'),
+            listEl=document.getElementById('playlist'),
+            searchEl=document.getElementById('searchInput'),
+            mask=document.getElementById('startMask'),
+            isOldSafari=/^((?!chrome|android).)*safari/i.test(navigator.userAgent)&&!window.visualViewport,
+            isMobile=/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      if(!audio) return;
+      currentCategory=initState && A.includes(initState.category) && C[initState.category]
+        ?initState.category
+        :(A.find(cat=>C[cat])||'');
+      if(initState && initState.category!==currentCategory) initState=null;
+      if(!currentCategory) return alert('未配置可用目录');
+      currentPlayer=audio;
+
+      const categoryToggle=document.getElementById('categoryToggle'),
+            categoryPanel=document.getElementById('categoryPanel'),
+            categoryPicker=document.getElementById('categoryPicker'),
+            categoryButtons=[...document.querySelectorAll('#categoryGrid button[data-cat]')];
+      function syncCategorySelection(){
+        document.getElementById('selectedCategoryName').textContent=C[currentCategory] || '待选择';
+        categoryButtons.forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.cat===currentCategory)));
+      }
+      function positionCategoryPanel(){
+        if(categoryPanel.hidden) return;
+        const rect=categoryToggle.getBoundingClientRect();
+        const width=Math.min(420,window.innerWidth-20);
+        const top=Math.max(10,Math.min(rect.bottom+8,window.innerHeight-150));
+        categoryPanel.style.width=`${width}px`;
+        categoryPanel.style.left=`${Math.max(10,Math.min(rect.left,window.innerWidth-width-10))}px`;
+        categoryPanel.style.top=`${top}px`;
+        categoryPanel.style.maxHeight=`${Math.min(360,window.innerHeight-top-10)}px`;
+      }
+      function closeCategoryPanel(restoreFocus=false){
+        categoryPanel.hidden=true;
+        categoryToggle.setAttribute('aria-expanded','false');
+        if(restoreFocus) categoryToggle.focus({preventScroll:true});
+      }
+      categoryToggle.onclick=()=>{
+        if(!categoryPanel.hidden) return closeCategoryPanel();
+        categoryPanel.hidden=false;
+        categoryToggle.setAttribute('aria-expanded','true');
+        positionCategoryPanel();
+        const selected=categoryButtons.find(btn=>btn.dataset.cat===currentCategory) || categoryButtons[0];
+        if(selected){selected.focus({preventScroll:true}); selected.scrollIntoView({block:'nearest'});}
+      };
+      document.getElementById('categoryClose').onclick=()=>closeCategoryPanel(true);
+      document.addEventListener('pointerdown',e=>{
+        if(!categoryPanel.hidden && !categoryPicker.contains(e.target)) closeCategoryPanel();
+      });
+      document.addEventListener('keydown',e=>{
+        if(e.key==='Escape' && !categoryPanel.hidden){e.preventDefault(); closeCategoryPanel(true);}
+      });
+      document.addEventListener('focusin',e=>{
+        if(!categoryPanel.hidden && !categoryPicker.contains(e.target)) closeCategoryPanel();
+      });
+      window.addEventListener('resize',positionCategoryPanel);
+      window.addEventListener('orientationchange',positionCategoryPanel);
+      syncCategorySelection();
+      const trackDetails=document.getElementById('currentTrackDetails'),
+            categoryCurrentRow=document.getElementById('categoryCurrentRow');
+      trackDetails.onclick=()=>{
+        closeCategoryPanel();
+        const expanded=categoryCurrentRow.classList.toggle('show-full-title');
+        trackDetails.setAttribute('aria-expanded',String(expanded));
+        trackDetails.setAttribute('aria-label',expanded?'收起曲目标题':'展开完整曲目标题');
+        adjustMargin();
+      };
+
+      const debounce=(fn,delay)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),delay);};};
+
+      // 从缓存加载分类数据
+      function loadFromCache(category) {
+        const cached = categoryCache[category];
+        if (cached && (Date.now() - cached.timestamp) < 600000) { // 10分钟缓存
+          console.log(`Loading ${category} from client cache (age: ${Math.floor((Date.now() - cached.timestamp)/1000)}s)`);
+          fullList = cached.data;
+          playlistArr = fullList.slice();
+          current = -1;
+          renderPlaylist();
+          updateDisplay();
+          return true;
+        }
+        return false;
+      }
+
+      // 保存到缓存
+      function saveToCache(category, data) {
+        categoryCache[category] = {
+          data: data,
+          timestamp: Date.now()
+        };
+
+        // 限制缓存大小，只保留最近5个分类
+        const keys = Object.keys(categoryCache);
+        if (keys.length > 5) {
+          const oldest = keys.reduce((a, b) =>
+            categoryCache[a].timestamp < categoryCache[b].timestamp ? a : b
+          );
+          delete categoryCache[oldest];
+          console.log(`Cache size limit reached, removed oldest: ${oldest}`);
+        }
+      }
+
+      function updateDisplay(){
+        syncCategorySelection();
+        document.getElementById('trackCount').textContent=playlistArr.length;
+        const title=current>=0 && playlistArr[current]?playlistArr[current].display:'待选择';
+        const trackValue=document.getElementById('currentTrackValue');
+        if(trackValue.textContent!==title){
+          categoryCurrentRow.classList.remove('show-full-title');
+          trackDetails.setAttribute('aria-expanded','false');
+          trackDetails.setAttribute('aria-label','展开完整曲目标题');
+        }
+        trackValue.textContent=title;
+        trackDetails.title=title;
+        trackDetails.disabled=title==='待选择';
+      }
+
+      function renderPlaylist(){
+        listEl.innerHTML='';
+        let frag=document.createDocumentFragment();
+        playlistArr.forEach((it,i)=>{
+          let li=document.createElement('li'); li.textContent=it.display;
+          if(i===current) li.classList.add('active');
+
+          // 添加防抖点击事件
+          let clickTimeout = null;
+          li.onclick=()=>{
+            if(clickTimeout) return; // 防止重复点击
+            clickTimeout = setTimeout(() => clickTimeout = null, 1000);
+            loadTrack(i);
+          };
+
+          frag.appendChild(li);
+        });
+        listEl.appendChild(frag);
+        buildJumpIndex();
+      }
+
+      function buildJumpIndex(){
+        let ji=document.getElementById('jumpIndex');
+        ji.innerHTML='';
+        let total=playlistArr.length;
+        ji.style.display=total?'flex':'none';
+        if(!total) return;
+        for(let i=0;i<=10;i++){
+          let pct=i*10,btn=document.createElement('div');
+          btn.textContent=pct+'%';
+          btn.onclick=()=>{
+            if(!total) return;
+            let idx=Math.min(total-1,Math.floor(pct/100*total));
+            let el=listEl.children[idx];
+            if(el) document.getElementById('mainContent').scrollTo({top:el.offsetTop});
+          };
+          ji.appendChild(btn);
+        }
+      }
+
+      function skipToNext(){
+        let next=isRandom?Math.floor(Math.random()*playlistArr.length):(current+1)%playlistArr.length;
+        loadTrack(next);
+      }
+
+      function loadTrack(idx,resume=0){
+        if(idx<0||idx>=playlistArr.length||isLoading) {
+          console.log(`Load track blocked: idx=${idx}, length=${playlistArr.length}, isLoading=${isLoading}`);
+          return;
+        }
+
+        // 防止重复加载同一曲目
+        if(current === idx && currentPlayer && currentPlayer.src) {
+          console.log(`Track ${idx} already loaded, skipping duplicate load`);
+          return;
+        }
+
+        // 防止频繁切换同一曲目
+        const now = Date.now();
+        if(lastPlayedTrack === `${currentCategory}:${idx}` && (now - playStartTime) < 3000) {
+          console.log(`Track ${idx} played too recently, skipping`);
+          return;
+        }
+
+        isLoading=true;
+        let unlocked = false; // 🚀 防重复解锁标志
+        console.log(`Loading track ${idx}: starting load process`);
+
+        // 🚀 混合策略：事件驱动 + 兜底超时解锁
+        const unlock = () => {
+          if (!unlocked) {
+            unlocked = true;
+            isLoading = false;
+            console.log(`Track ${idx}: loading unlocked`);
+          }
+        };
+
+        let it=playlistArr[idx],
+            url=`/mp3?category=${encodeURIComponent(currentCategory)}&playname=${encodeURIComponent(it.play)}`,
+            isVid=it.play.endsWith('.mp4');
+
+        console.log(`Loading track ${idx}: ${it.display}, isVideo: ${isVid}`);
+        console.log(`🚀 Media URL: ${url}`); // 调试：打印完整URL
+
+        if(isVid){
+          audio.pause(); audio.style.display='none';
+          video.style.display='block';
+          if(video.src !== url) video.src=url; // 只在URL不同时设置
+          currentPlayer=video;
+        } else {
+          video.pause(); video.style.display='none';
+          audio.style.display='block';
+          if(audio.src !== url) audio.src=url; // 只在URL不同时设置
+          currentPlayer=audio;
+        }
+
+        // 🚀 事件驱动解锁（优先）
+        currentPlayer.addEventListener('canplay', unlock, {once: true});
+        currentPlayer.addEventListener('loadeddata', unlock, {once: true});
+
+        // 🚀 兜底超时解锁（避免事件失效导致死锁）
+        setTimeout(unlock, 3000);
+
+        currentPlayer.load();
+        currentPlayer.play().catch(e=>{
+          console.log('Play failed:',e);
+          unlock(); // 播放失败时也要解锁
+        });
+
+        if(resume){
+          const onCan=()=>{
+            if(currentPlayer.currentTime<resume) currentPlayer.currentTime=resume;
+            currentPlayer.removeEventListener('canplay',onCan);
+          };
+          currentPlayer.addEventListener('canplay',onCan);
+        }
+
+        current=idx;
+        lastPlayedTrack=`${currentCategory}:${idx}`;
+        playStartTime=now;
+        renderPlaylist(); updateDisplay();
+
+        // 播放器切换后重新调整布局(防抖)
+        if(layoutAdjustmentTimer) clearTimeout(layoutAdjustmentTimer);
+        layoutAdjustmentTimer = setTimeout(adjustMargin, 300);
+      }
+
+      [audio,video].forEach(p=>{
+        ['stalled','waiting','pause'].forEach(e=>
+          p.addEventListener(e,()=>{ savedTime=p.currentTime; if(e==='pause') userPaused=false; })
+        );
+        p.addEventListener('ended',()=>skipToNext());
+        p.addEventListener('error',()=>{
+          isLoading=false;
+          const message=document.getElementById('loading');
+          message.textContent='播放失败，请刷新列表或选择其他曲目。';
+          message.style.display='block';
+        });
+
+        // 视频尺寸变化时重新调整布局(防抖)
+        p.addEventListener('loadedmetadata', () => {
+          console.log('Media metadata loaded, adjusting layout');
+          if(layoutAdjustmentTimer) clearTimeout(layoutAdjustmentTimer);
+          layoutAdjustmentTimer = setTimeout(adjustMargin, 200);
+        });
+        p.addEventListener('canplay', () => {
+          console.log('Media can play, adjusting layout');
+          if(layoutAdjustmentTimer) clearTimeout(layoutAdjustmentTimer);
+          layoutAdjustmentTimer = setTimeout(adjustMargin, 200);
+        });
+      });
+
+      // 智能断线续播机制
+      let networkStatus = navigator.onLine;
+      let reconnectTimeout = null;
+
+      window.addEventListener('offline',()=>{
+        networkStatus = false;
+        console.log('Network offline detected');
+      });
+
+      window.addEventListener('online',()=>{
+        if(!networkStatus && current >= 0 && !isLoading) {
+          networkStatus = true;
+          console.log('Network back online, attempting smart reconnect');
+
+          // 防抖：延迟重连避免频繁网络变化
+          clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(() => {
+            if(currentPlayer && currentPlayer.paused && current >= 0 && !isLoading) {
+              const timeSinceLastPlay = Date.now() - playStartTime;
+              if(timeSinceLastPlay > 5000) { // 至少5秒后才重连
+                console.log('Resuming playback after reconnect');
+                loadTrack(current, savedTime);
+              }
+            }
+          }, 3000); // 3秒延迟
+        } else {
+          networkStatus = true;
+        }
+      });
+
+      const doSearch=()=>{
+        let terms=searchEl.value.trim().toLowerCase().split(/\s+/).filter(t=>t);
+        playlistArr=terms.length
+          ? fullList.filter(i=>terms.every(t=>i.display.toLowerCase().includes(t)))
+          : fullList.slice();
+        current=-1; renderPlaylist(); updateDisplay();
+      };
+      const debSearch=debounce(doSearch,200);
+      searchEl.addEventListener('input',debSearch);
+      ['search','keydown','focusout'].forEach(evt=>
+        searchEl.addEventListener(evt,e=>{
+          if(evt==='keydown'&&(e.key==='Enter'||e.keyCode===13)){
+            e.preventDefault(); searchEl.blur();
+          }
+          setTimeout(()=>{},isOldSafari?300:0);
+        })
+      );
+
+      playBtn.onclick=()=>currentPlayer.play().catch(()=>{});
+      pauseBtn.onclick=()=>{
+        userPaused=true;
+        currentPlayer.paused?currentPlayer.play():currentPlayer.pause();
+      };
+      randBtn.onclick=()=>{
+        isRandom=!isRandom;
+        randBtn.textContent=isRandom?'顺序播放':'随机播放';
+      };
+
+      // 防抖的布局调整函数
+      let adjustMarginTimer = null;
+      function adjustMargin(){
+        // 防抖：避免频繁调用
+        if(adjustMarginTimer) {
+          clearTimeout(adjustMarginTimer);
+        }
+
+        adjustMarginTimer = setTimeout(() => {
+          const header = document.getElementById('fixedHeader');
+          const mainContent = document.getElementById('mainContent');
+          const jumpIndex = document.getElementById('jumpIndex');
+
+          if(!header || !mainContent || !jumpIndex) return;
+
+          // 使用 getBoundingClientRect 获取准确的高度
+          const headerRect = header.getBoundingClientRect();
+          const headerHeight = Math.max(headerRect.height, 80); // 最小高度80px
+
+          console.log(`Adjusting layout: Header height ${headerHeight}px`);
+
+          mainContent.style.paddingTop = `${headerHeight + 15}px`; // 加15px余量
+          jumpIndex.style.top = `${headerHeight}px`;
+          jumpIndex.style.height = `${Math.max(window.innerHeight - headerHeight, 200)}px`;
+
+          adjustMarginTimer = null;
+        }, 100); // 100ms防抖延迟
+      }
+      window.onresize=adjustMargin;
+      window.onorientationchange=adjustMargin;
+
+      // 🚀 重写可中断的刷新播放列表函数
+      function refreshPlaylist({ category, force=false, background=false }){
+        const reqToken = background ? lastReqToken : ++lastReqToken;
+
+        // 主动取消上一个进行中的请求
+        if(currentFetchController && !background) {
+          currentFetchController.abort();
+          console.log('Previous request aborted for new category switch');
+        }
+
+        const ctrl = new AbortController();
+        if(!background) currentFetchController = ctrl;
+
+        const targetCategory = category || currentCategory;
+        console.log(`Starting refresh for category: ${targetCategory}, force: ${force}, background: ${background}`);
+
+        const apiUrl = force
+          ? `/api/list_mp3?category=${encodeURIComponent(targetCategory)}&force=1`
+          : `/api/list_mp3?category=${encodeURIComponent(targetCategory)}`;
+
+        return fetch(apiUrl, {
+          credentials:'same-origin',
+          signal: ctrl.signal
+        })
+        .then(r=>{
+          if(r.status===403) throw 'NO_PERMISSION';
+          if(!r.ok) throw r.status;
+          return r.json();
+        })
+        .then(d=>{
+          // 🚀 仅处理最新一次请求的结果
+          if(reqToken !== lastReqToken && !background) {
+            console.log(`Discarding outdated response for ${targetCategory}`);
+            return [];
+          }
+
+          const sorted = d.sort((a,b)=>a.display.localeCompare(b.display,undefined,{numeric:true}));
+
+          // 只在非后台更新时更新界面
+          if (!background) {
+            fullList = sorted;
+            playlistArr = sorted.slice();
+            current = -1;
+            currentCategory = targetCategory; // 🚀 更新当前分类
+            video.pause(); video.style.display='none';
+            audio.style.display='block'; currentPlayer=audio;
+            renderPlaylist(); updateDisplay();
+            if(layoutAdjustmentTimer) clearTimeout(layoutAdjustmentTimer);
+            layoutAdjustmentTimer = setTimeout(adjustMargin, 200);
+          } else {
+            // 后台更新：检查数据是否有变化
+            if (JSON.stringify(sorted) !== JSON.stringify(categoryCache[targetCategory]?.data || [])) {
+              console.log(`Background update: data changed for ${targetCategory}, updating cache`);
+              saveToCache(targetCategory, sorted);
+            }
+          }
+
+          console.log(`Loaded ${d.length} files for category: ${targetCategory}`);
+          return d;
+        })
+        .catch(e=>{
+          if(e.name === 'AbortError') {
+            console.log(`Request aborted for category: ${targetCategory}`);
+            return [];
+          }
+
+          console.error('Failed to load playlist:', e);
+          if(e==='NO_PERMISSION'){
+            // 没权限取列表，回退到默认分类再试
+            const def=A[0];
+            if(def && def!==targetCategory){
+              return refreshPlaylist({ category: def, force: true });
+            }
+          }
+          if (!background) {
+            throw e; // 重新抛出错误以便上层处理
+          }
+          return [];
+        })
+        .finally(() => {
+          if (!background && currentFetchController?.signal === ctrl.signal) {
+            currentFetchController = null;
+          }
+          console.log(`Refresh completed for category: ${targetCategory}`);
+        });
+      }
+
+      function tryRestore(){
+        if(initState&&typeof initState.index==='number'&&!isLoading){
+          const idx=initState.index, tm=initState.time;
+          if(Number.isInteger(idx) && idx>=0 && idx<playlistArr.length){
+            const it=playlistArr[idx];
+            const url=`/mp3?category=${encodeURIComponent(currentCategory)}&playname=${encodeURIComponent(it.play)}`;
+            fetch(url,{method:'HEAD',credentials:'same-origin'})
+              .then(r=>{
+                if(r.status===403) throw 'NO';
+                loadTrack(idx,tm);
+              })
+              .catch(()=>{
+                if(playlistArr.length) loadTrack(0);
+              });
+          } else if(playlistArr.length){
+            loadTrack(0);
+          }
+        } else if(playlistArr.length&&!isLoading){
+          loadTrack(0);
+        }
+        initState=null;
+      }
+
+      refreshPlaylist({ category: currentCategory, force: false }).then((data)=>{
+        // 缓存初始数据
+        if (data && data.length > 0) {
+          saveToCache(currentCategory, data);
+        }
+
+        syncCategorySelection();
+
+        // 预加载热门栏目（如果是管理员或有权限的用户）
+        setTimeout(() => {
+          preloadPopularCategories();
+        }, 2000);
+
+        // 移动端遮罩或 PC 直接恢复
+        if(isMobile){
+          mask.style.display='flex';
+          mask.onclick=()=>{
+            mask.style.display='none';
+            tryRestore();
+          };
+        } else {
+          tryRestore();
+        }
+      });
+
+      // 🚀 B-1: 串行限流预加载热门栏目
+      let preloadQueue = [];
+      let isPreloading = false;
+
+      async function processPreloadQueue() {
+        if (isPreloading || preloadQueue.length === 0) return;
+
+        isPreloading = true;
+        while (preloadQueue.length > 0) {
+          const { cat, resolve, reject } = preloadQueue.shift();
+          try {
+            console.log(`Serial preloading category: ${cat}`);
+            const data = await refreshPlaylist({ category: cat, background: true });
+            if (data && data.length > 0) {
+              saveToCache(cat, data);
+              console.log(`Serial preloaded ${data.length} files for category: ${cat}`);
+            }
+            resolve(data);
+            // 🚀 限流：每次预加载间隔2秒，避免频繁请求
+            await new Promise(r => setTimeout(r, 2000));
+          } catch (err) {
+            console.log(`Serial preload failed for ${cat}:`, err);
+            reject(err);
+          }
+        }
+        isPreloading = false;
+      }
+
+      function queuePreload(cat) {
+        return new Promise((resolve, reject) => {
+          preloadQueue.push({ cat, resolve, reject });
+          processPreloadQueue();
+        });
+      }
+
+      // 预加载热门栏目
+      function preloadPopularCategories() {
+        const popularCats = ['public', 'selected', 'latest']; // 音乐、精选、时事 - 根据实际使用情况调整
+        const userAllowed = A || [];
+
+        popularCats.forEach((cat, index) => {
+          if (userAllowed.includes(cat) && cat !== currentCategory && !categoryCache[cat]) {
+            // 🚀 使用串行队列而非并发延时
+            queuePreload(cat).catch(err => {
+              console.log(`Preload failed for ${cat}:`, err);
+            });
+          }
+        });
+      }
+
+      refBtn.onclick=()=>refreshPlaylist({ category: currentCategory, force: true });
+      document.querySelectorAll('#categories button[data-cat]').forEach(b=>{
+        b.onclick=()=>{
+          closeCategoryPanel(true);
+          const targetCategory = b.dataset.cat;
+          const targetLabel = C[targetCategory];
+
+          // 如果点击的是当前分类，不需要切换
+          if (targetCategory === currentCategory) {
+            return;
+          }
+
+          audio.pause();
+          video.pause();
+          isLoading=false;
+          currentCategory = targetCategory;
+          syncCategorySelection();
+
+          // 显示加载状态
+          const loadingEl = document.getElementById('loading');
+          loadingEl.textContent = `正在切换到${targetLabel}...`;
+          loadingEl.style.display = 'block';
+
+          // 尝试从客户端缓存立即加载
+          const listEl = document.getElementById('playlist');
+          if (loadFromCache(targetCategory)) {
+            // 缓存命中，立即显示数据
+            currentCategory = targetCategory;
+            loadingEl.textContent = `${targetLabel} (已缓存)`;
+            setTimeout(() => loadingEl.style.display = 'none', 500);
+
+            // 后台验证数据新鲜度
+            refreshPlaylist({ category: targetCategory, background: true }).catch(err => {
+              console.log('Background refresh failed:', err);
+            });
+          } else {
+            // 缓存未命中，显示加载状态并从服务器获取
+            // 🚀 B-2: 骨架屏优化，提供更好的加载体验
+            const skeletonItems = Array.from({length: 8}, (_, i) =>
+              `<li class="skeleton-item" style="padding:12px 8px; border-bottom:1px solid #ddd; height:24px; border-radius:4px; margin-bottom:6px;"></li>`
+            ).join('');
+
+            listEl.innerHTML = `
+              <li style="text-align:center; color:#666; padding:12px;">
+                正在加载 ${targetLabel}...
+              </li>
+              ${skeletonItems}
+            `;
+            currentCategory = targetCategory;
+
+            const startTime = Date.now();
+            refreshPlaylist({ category: targetCategory }) // 首先尝试服务器缓存，不强制刷新
+              .then((result) => {
+                const loadTime = Date.now() - startTime;
+                console.log(`Category switch completed in ${loadTime}ms`);
+                if (result && result.length > 0) {
+                  saveToCache(targetCategory, result);
+                }
+                return result;
+              })
+              .then(() => {
+                initState=null;
+                loadingEl.style.display = 'none';
+              })
+              .catch(err => {
+                console.error('Category switch failed:', err);
+                loadingEl.textContent = '加载失败，请重试';
+                listEl.innerHTML = '<li style=\"text-align:center; color:#red; padding:20px;\">加载失败，请点击刷新重试</li>';
+                setTimeout(() => {
+                  loadingEl.style.display = 'none';
+                }, 3000);
+              });
+          }
+        };
+      });
+      document.getElementById('sortOrderBtn').onclick=function(){
+        const asc=this.textContent==='升序';
+        this.textContent=asc?'降序':'升序';
+        fullList.sort((a,b)=>
+          asc?b.display.localeCompare(a.display,undefined,{numeric:true})
+              :a.display.localeCompare(b.display,undefined,{numeric:true})
+        );
+        playlistArr=fullList.slice();
+        renderPlaylist(); updateDisplay();
+      };
+
+      document.getElementById('headerToggle').onclick=function(){
+        closeCategoryPanel();
+        const hdr=document.getElementById('fixedHeader');
+        hdr.classList.toggle('collapsed');
+        this.textContent=hdr.classList.contains('collapsed')?'▼':'▲';
+        // 延迟调整以等待CSS动画完成
+        setTimeout(adjustMargin, 350);
+      };
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+/* 禁用横向滚动 */
+html, body {
+  overflow-x: hidden;
+}
+
+
+/* 基本样式 */
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+}
+
+h1, h2 {
+  color: #333;
+}
+
+h1 {
+  text-align: center;
+}
+
+/* 分类按钮样式 */
+#categories {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+#categories button {
+  margin: 5px;
+  padding: 10px 20px;
+  font-size: 16px;
+  border: none;
+  border-radius: 4px;
+  background-color: #28a745; /* 分类按钮采用绿色 */
+  color: white;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+#categories button:active {
+  transform: scale(0.98);
+}
+
+/* 如需标识当前激活的分类，可添加 active 类 */
+#categories button.active {
+  background-color: #218838;
+}
+
+/* 音频播放器样式 */
+#audioPlayer {
+  width: 100%;
+  display: block;
+}
+
+/* 进度条样式 */
+#progressBar {
+  width: 100%;
+  margin-top: 5px;
+  -webkit-appearance: none;
+  background-color: #ddd;
+  height: 5px;
+  border-radius: 3px;
+}
+#progressBar::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background-color: #007BFF;
+  cursor: pointer;
+  margin-top: -5px;
+}
+
+/* 控制区样式 */
+#controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+#controls button {
+  margin: 5px;
+  padding: 10px 20px;
+  font-size: 16px;
+  border: none;
+  border-radius: 4px;
+  background-color: #007BFF;
+  color: white;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+#controls button:active {
+  transform: scale(0.98);
+}
+
+/* 播放列表样式 */
+#playlist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#playlist li {
+  cursor: pointer;
+  padding: 10px;
+  border-bottom: 1px solid #ccc;
+  font-size: 16px;
+}
+
+#playlist li:hover {
+  background-color: #f0f0f0;
+}
+
+#playlist li.active {
+  font-weight: bold;
+  color: blue;
+  background-color: #e0e0ff;
+}
+
+/* 音频容器（用于固定顶部显示） */
+#audioContainer {
+  width: 100%;
+}
+
+/* 移动端优化 */
+@media (max-width: 600px) {
+  body {
+    margin: 10px;
+    /* 为固定的音频区域留出顶部空间 */
+    margin-top: 70px;
+  }
+
+  /* 将音频容器固定在顶部 */
+  #audioContainer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: #fff;
+    z-index: 9999;
+    padding: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+
+  /* 分类按钮容器设置为一行显示 */
+  #categories {
+    display: flex;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: 5px;
+  }
+
+  #categories button {
+    font-size: 14px;
+    padding: 6px 10px;
+    flex: 0 1 auto;
+  }
+
+  /* 控制区按钮一行显示 */
+  #controls {
+    flex-wrap: nowrap;
+    gap: 5px;
+  }
+
+  #controls button {
+    font-size: 14px;
+    padding: 6px 10px;
+    flex: 0 1 auto;
+  }
+
+  /* 播放列表样式调整 */
+  #playlist li {
+    font-size: 16px;
+    padding: 8px;
+  }
+
+  /* 进度条在手机端也保持全宽 */
+  #progressBar {
+    height: 5px;
+  }
+}
