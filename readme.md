@@ -1,5 +1,11 @@
 # Sofia Media
 
+Self-hosted MP3/MP4 media player (Flask + Waitress) with per-account directory permissions — each account can only browse and play its own allowed folders. Built for schools, families and shared kiosks: one player, many audiences, no content leakage. Loopback-only by default; plain-file configuration; no database; runs on Windows / Linux / macOS.
+
+![播放器界面](docs/screenshot-player.png)
+
+---
+
 基于 Flask 的 MP3 / MP4 媒体播放器，从本机 `media_files` 目录读取媒体文件。
 默认通过 Waitress 运行在 **http://127.0.0.1:15001**，仅供本机访问。
 
@@ -27,6 +33,8 @@
 - 修改 `user.dic` 后刷新页面即可生效，无需重启程序。
 - 公共目录入口只开放 `PUBLIC_CATEGORIES` 列出的目录，适合开放给访客或公共设备。
 - 管理员账号只用于查看播放历史，不进入播放器。
+
+![目录选择面板](docs/screenshot-panel.png)
 
 ## 使用场合举例
 
@@ -174,7 +182,11 @@ MP4 能否播放取决于浏览器的编码支持，演示视频采用 H.264 / A
 
 ## 公开仓库内容
 
-公开文件包括程序、页面、样式、虚拟配置示例和测试。
+公开文件包括程序、页面、样式、虚拟配置示例、截图和测试。
 真实配置、账号文件、会话密钥、历史记录、日志、媒体文件、虚拟环境及旧版备份均被 `.gitignore` 排除。
 
 相关运行机制可参阅 [Waitress 配置文档](https://docs.pylonsproject.org/projects/waitress/en/stable/arguments.html)、[Flask 文件响应文档](https://flask.palletsprojects.com/en/stable/api/#flask.send_file)和 [filelock 文档](https://py-filelock.readthedocs.io/en/latest/)。
+
+## 许可证
+
+本项目采用 MIT 许可证，详见 [LICENSE](LICENSE)。
